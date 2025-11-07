@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import API from "../api";
 import logo from "../assets/mc.jpg"; // 👈 เพิ่มบรรทัดนี้ (เปลี่ยนพาธ/ชื่อไฟล์ตามจริง)
 
+
 export default function Navbar() {
   const { pathname } = useLocation();
   const [user, setUser] = useState(() => {
