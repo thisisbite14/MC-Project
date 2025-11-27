@@ -3,46 +3,68 @@ const session = require('express-session');
 const path = require('path');
 const cors = require('cors');
 const MySQLStore = require('express-mysql-session')(session);
-const pool = require('./db');               // mysql2 createPool
+const pool = require('./db');
 require('dotenv').config();
 
 const app = express();
 
+// ----------------------------------------------------------------
+//  การตั้งค่าสภาพแวดล้อม (Environment)
+// ----------------------------------------------------------------
+const isProduction = process.env.NODE_ENV === 'production';
+console.log(`Running in ${isProduction ? 'production' : 'development'} mode.`);
+
 /** ----------------------------------------------------------------
  * CORS
- * - เปิดสำหรับ http://localhost:5173 และ http://127.0.0.1:5173
- * - เปิด credentials (ให้ cookie วิ่งได้)
- * - รองรับ preflight ด้วย optionsSuccessStatus 200
  * ---------------------------------------------------------------- */
-const ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://mc-project-53qj.vercel.app'];
+const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  frontendURL,
+];
+
+// เพิ่ม URL ของ Vercel/Railway/Deployments อื่นๆ เข้าไปใน List ถ้ามี
+if (isProduction && process.env.VERCEL_URL) {
+  ALLOWED_ORIGINS.push(`https://${process.env.VERCEL_URL}`);
+}
+
 app.use(cors({
   origin(origin, cb) {
-    // อนุญาต client tools ที่ไม่มี Origin เช่น Postman หรือ curl
-    if (!origin) return cb(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    return cb(new Error('Not allowed by CORS'));
+    if (!origin) return cb(null, true); // อนุญาต request ที่ไม่มี origin (เช่น Postman)
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return cb(null, true);
+    }
+    // สำหรับ Vercel Preview Deployments (ถ้าใช้)
+    if (isProduction && origin.includes('vercel.app')) {
+      return cb(null, true);
+    }
+    return cb(new Error('Not allowed by CORS: ' + origin));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'x-auth-token'],
-  optionsSuccessStatus: 200, // ✅ IE/legacy
+  optionsSuccessStatus: 200,
 }));
+
 
 /** ----------------------------------------------------------------
  * Body parsers
- * - เพิ่ม limit เพื่อกัน json ใหญ่ ๆ
  * ---------------------------------------------------------------- */
-app.use(express.json({ limit: '2mb' }));             // ✅ limit
-app.use(express.urlencoded({ extended: true, limit: '2mb' })); // ✅ limit
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 /** ----------------------------------------------------------------
  * Session
- * - สำหรับ dev: secure:false, sameSite:lax เพียงพอ
- * - หากรันหลัง reverse proxy (Nginx) ค่อยเปิด trust proxy + secure:true
  * ---------------------------------------------------------------- */
-// app.set('trust proxy', 1); // ✅ เปิดเมื่อมี proxy และจะใช้ cookie.secure:true
+// ✅ เปิด trust proxy เมื่ออยู่ใน Production (เช่น Railway/Vercel)
+if (isProduction) {
+  app.set('trust proxy', 1); 
+  console.log("Trust Proxy is ENABLED (1)");
+}
 
-const sessionStore = new MySQLStore({}, pool); // ใช้ mysql2 pool ได้ตรง ๆ
+const sessionStore = new MySQLStore({}, pool);
 app.use(session({
   name: 'mc.sid',
   secret: process.env.SESSION_SECRET || 'dev_secret_change_me',
@@ -52,24 +74,25 @@ app.use(session({
   cookie: {
     maxAge: 86400000,   // 1 วัน
     httpOnly: true,
-    sameSite: 'lax',
-    secure: false,      // ✅ เปิด true เมื่อใช้ HTTPS + trust proxy
+    // ✅ 
+    // [Production]   ใช้ 'none' และ 'true' เพื่อให้คุกกี้ทำงานข้ามโดเมน (cross-domain) บน HTTPS
+    // [Development]  ใช้ 'lax' และ 'false' เพื่อให้คุกกี้ทำงานบน HTTP localhost
+    sameSite: isProduction ? 'none' : 'lax', 
+    secure: isProduction,                   
   },
 }));
 
 /** ----------------------------------------------------------------
  * Static uploads
- * - ใส่ Cache-Control เบา ๆ เพื่อลด revalidate
  * ---------------------------------------------------------------- */
 const uploadsPath = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsPath, {
-  maxAge: '1h',                       // ✅ ให้ cache ฝั่งเบราเซอร์เล็กน้อย
+  maxAge: '1h',
   etag: true,
 }));
 
 /** ----------------------------------------------------------------
  * Routes
- *  (ต้อง mount หลังจาก session)
  * ---------------------------------------------------------------- */
 const authRoutes        = require('./routes/auth');
 const memberRoutes      = require('./routes/members');
@@ -80,12 +103,11 @@ const financeRoutes     = require('./routes/finances');
 const projectRoutes     = require('./routes/projects');
 const equipmentsRoutes  = require('./routes/equipments');
 const permissionRoutes  = require('./routes/permissions');
-const siteRoutes        = require('./routes/site');   // ✅ /api/site/home ใช้ requireAdmin แล้ว
-const uploadRoutes      = require('./routes/upload'); // uploader
+const siteRoutes        = require('./routes/site');
+const uploadRoutes      = require('./routes/upload');
 
-// อัปโหลดควรวางก่อน 404
-app.use('/api/files',  uploadRoutes); // ✅ Documents.jsx ใช้เส้นนี้
-app.use('/api/upload', uploadRoutes); // ทางเก่า (สำรอง)
+app.use('/api/files',     uploadRoutes);
+app.use('/api/upload',    uploadRoutes);
 
 app.use('/api/site',        siteRoutes);
 app.use('/api/auth',        authRoutes);
@@ -106,9 +128,9 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  // แยก error ของ CORS ชัด ๆ (จะเจอเวลา origin ไม่อยู่ใน allow-list)
-  if (err && err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ message: 'CORS forbidden: ' + (req.headers.origin || '') });
+  if (err && err.message.startsWith('Not allowed by CORS')) {
+    console.error('CORS Error:', err.message);
+    return res.status(403).json({ message: 'CORS forbidden' });
   }
   console.error('Error:', err && (err.stack || err));
   res.status(500).json({ message: 'Internal Server Error' });

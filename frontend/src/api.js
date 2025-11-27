@@ -1,11 +1,11 @@
 // src/api.js
-// ถ้ามี VITE_API_BASE ให้ใช้; ถ้าไม่มีก็ใช้ path relative ("")
-const RAW_BASE = (import.meta.env.VITE_API_BASE ?? "").trim();
-// ถ้า set เป็น "http://localhost:3000" จะกลายเป็น cross-origin (คุกกี้ไม่ถูกส่ง)
-const API_BASE = RAW_BASE || ""; // => เรียก /api/... ตรง ๆ
+import axios from 'axios';
+
+// 1. ต้องใช้ชื่อตัวแปร VITE_API_BASE_URL ให้ตรงกับที่ตั้งใน Vercel
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 export default {
-  BASE: API_BASE,
+  BASE: BACKEND_URL, // ส่งค่า URL ที่ถูกต้องออกไป
   withCreds: {
     credentials: "include",
     headers: { "Content-Type": "application/json" },

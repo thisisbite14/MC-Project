@@ -1,7 +1,7 @@
 // src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import HomeEditor from "./pages/admin/HomeEditor.jsx";
-import Navbar    from "./components/navbar.jsx";
+import Navbar    from "./components/Navbar.jsx";
 import Home      from "./pages/Home.jsx";
 
 // auth
