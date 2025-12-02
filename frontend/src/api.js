@@ -1,21 +1,23 @@
 import axios from 'axios';
 
-// 1. ใช้ชื่อ VITE_API_BASE_URL ให้ตรงกับใน Vercel เป๊ะๆ
+// 1. ดึง URL หลัก (เช่น https://back-mc...app)
 const BACKEND_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000").trim();
 
-// 2. สร้าง axios instance (วิธีนี้ดีกว่า fetch เพราะจัดการ cookie/credentails ให้อัตโนมัติ)
+// 2. ตั้งค่า Axios (อันนี้เก็บ /api ไว้ได้ ถ้าคุณใช้ api.get('/auth/...') ในอนาคต)
 const api = axios.create({
-  baseURL: `${BACKEND_URL}/api`, // เติม /api ต่อท้ายให้เลย
-  withCredentials: true,         // สำคัญมาก! ส่ง Cookie/Session ไปด้วย
+  baseURL: `${BACKEND_URL}/api`, 
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   }
 });
 
-// 3. export default ออกไป
-// แถมตัวแปร BASE เผื่อโค้ดเก่าเรียกใช้ (แต่แนะนำให้เปลี่ยนไปใช้ api.get/post แทน)
+// 3. Export
 export default Object.assign(api, { 
-  BASE: `${BACKEND_URL}/api`, 
+  // 🚨 แก้ไขตรงนี้: ลบ /api ออก! 
+  // เพื่อให้เวลาหน้าเว็บเอาไปใช้เป็น `${API.BASE}/api/auth/...` แล้ว path ไม่เบิ้ล
+  BASE: BACKEND_URL, 
+  
   withCreds: { 
     credentials: "include", 
     headers: { "Content-Type": "application/json" } 
